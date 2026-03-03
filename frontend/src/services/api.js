@@ -55,6 +55,15 @@ export async function joinProject(projectId, userId) {
   return handleResponse(response)
 }
 
+export async function leaveProject(projectId, userId) {
+  const response = await fetch(`${API_BASE}/projects/leave`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, userId }),
+  })
+  return handleResponse(response)
+}
+
 // --- Hardware ---
 
 export async function getHardware(projectId) {

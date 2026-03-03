@@ -18,7 +18,7 @@ import {
   AppBar,
   Toolbar,
 } from '@mui/material'
-import { getProjects, createProject, joinProject } from '../services/api'
+import { getProjects, createProject, joinProject, leaveProject } from '../services/api'
 
 function ProjectsPage() {
   const navigate = useNavigate()
@@ -96,6 +96,18 @@ function ProjectsPage() {
     }
   }
 
+  const handleLeaveProject = async (projectId) => {
+    try {
+      await leaveProject(projectId, userId)
+      setSuccess('Left project!')
+      setError('')
+      loadProjects()
+    } catch (err) {
+      setError('Failed to leave project.')
+      setSuccess('')
+    }
+  }
+
   const handleLogout = () => {
     sessionStorage.removeItem('userId')
     navigate('/login')
@@ -132,12 +144,13 @@ function ProjectsPage() {
                 <TableCell><strong>Project ID</strong></TableCell>
                 <TableCell><strong>Name</strong></TableCell>
                 <TableCell><strong>Description</strong></TableCell>
+                <TableCell><strong>Actions</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {projects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} align="center">
+                  <TableCell colSpan={4} align="center">
                     No projects yet. Create or join one below.
                   </TableCell>
                 </TableRow>
@@ -152,6 +165,18 @@ function ProjectsPage() {
                     <TableCell>{project.projectId}</TableCell>
                     <TableCell>{project.name}</TableCell>
                     <TableCell>{project.description}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleLeaveProject(project.projectId)
+                        }}
+                      >
+                        Leave
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
