@@ -18,6 +18,22 @@ client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
 db = client['haas_db']
 users_collection = db['users']
 projects_collection = db['projects']
+hardware_collection = db['hardware']
+
+
+# Initialize default hardware sets if they don't exist
+def init_hardware():
+    for hw_name in ['HWSet1', 'HWSet2']:
+        if not hardware_collection.find_one({'name': hw_name}):
+            hardware_collection.insert_one({
+                'name': hw_name,
+                'capacity': 100,
+                'available': 100,
+                'checkouts': {}
+            })
+
+
+init_hardware()
 
 
 @app.route('/api/register', methods=['POST'])
@@ -172,6 +188,102 @@ def leave_project():
     updated = projects_collection.find_one({'projectId': project_id})
     if not updated['members']:
         projects_collection.delete_one({'projectId': project_id})
+
+    return jsonify({'success': True}), 200
+
+
+@app.route('/api/hardware', methods=['GET'])
+def get_hardware():
+    project_id = request.args.get('projectId', '').strip()
+
+    if not project_id:
+        return jsonify({'error': 'projectId is required'}), 400
+
+    hw_sets = hardware_collection.find()
+
+    result = []
+    for hw in hw_sets:
+        checked_out = hw.get('checkouts', {}).get(project_id, 0)
+        result.append({
+            'name': hw['name'],
+            'capacity': hw['capacity'],
+            'available': hw['available'],
+            'checkedOut': checked_out,
+        })
+
+    return jsonify({'hwSets': result}), 200
+
+
+@app.route('/api/hardware/checkout', methods=['POST'])
+def checkout_hardware():
+    data = request.get_json()
+    project_id = data.get('projectId', '').strip()
+    hw_set = data.get('hwSet', '').strip()
+    quantity = data.get('quantity', 0)
+
+    if not project_id or not hw_set or not quantity:
+        return jsonify({'error': 'projectId, hwSet, and quantity are required'}), 400
+
+    if quantity <= 0:
+        return jsonify({'error': 'Quantity must be positive'}), 400
+
+    # Verify project exists
+    project = projects_collection.find_one({'projectId': project_id})
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+
+    # Find hardware set
+    hw = hardware_collection.find_one({'name': hw_set})
+    if not hw:
+        return jsonify({'error': 'Hardware set not found'}), 404
+
+    if quantity > hw['available']:
+        return jsonify({'error': f'Not enough units available. Only {hw["available"]} remaining'}), 400
+
+    # Decrease available, increase this project's checkout count
+    hardware_collection.update_one(
+        {'name': hw_set},
+        {'$inc': {'available': -quantity, f'checkouts.{project_id}': quantity}}
+    )
+
+    return jsonify({'success': True}), 200
+
+
+@app.route('/api/hardware/checkin', methods=['POST'])
+def checkin_hardware():
+    data = request.get_json()
+    project_id = data.get('projectId', '').strip()
+    hw_set = data.get('hwSet', '').strip()
+    quantity = data.get('quantity', 0)
+
+    if not project_id or not hw_set or not quantity:
+        return jsonify({'error': 'projectId, hwSet, and quantity are required'}), 400
+
+    if quantity <= 0:
+        return jsonify({'error': 'Quantity must be positive'}), 400
+
+    # Find hardware set
+    hw = hardware_collection.find_one({'name': hw_set})
+    if not hw:
+        return jsonify({'error': 'Hardware set not found'}), 404
+
+    # Check how much this project has checked out
+    current_checkout = hw.get('checkouts', {}).get(project_id, 0)
+    if quantity > current_checkout:
+        return jsonify({'error': f'Cannot check in {quantity} units. Only {current_checkout} checked out by this project'}), 400
+
+    # Increase available, decrease this project's checkout count
+    hardware_collection.update_one(
+        {'name': hw_set},
+        {'$inc': {'available': quantity, f'checkouts.{project_id}': -quantity}}
+    )
+
+    # Clean up: remove project key if checkout is now 0
+    if current_checkout - quantity == 0:
+        hardware_collection.update_one(
+            {'name': hw_set},
+            {'$unset': {f'checkouts.{project_id}': ''}}
+        )
 
     return jsonify({'success': True}), 200
 

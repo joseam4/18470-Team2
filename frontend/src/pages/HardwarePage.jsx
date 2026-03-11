@@ -51,7 +51,7 @@ function HardwarePage() {
       setError('')
       loadHardware()
     } catch (err) {
-      setError(`Failed to check out from ${hwSetName}`)
+      setError(err.message || `Failed to check out from ${hwSetName}`)
       setSuccess('')
     }
   }
@@ -63,7 +63,7 @@ function HardwarePage() {
       setError('')
       loadHardware()
     } catch (err) {
-      setError(`Failed to check in to ${hwSetName}`)
+      setError(err.message || `Failed to check in to ${hwSetName}`)
       setSuccess('')
     }
   }
